@@ -18,7 +18,7 @@ jobs:
     - name: Checkout the Nginx configuration
       uses: actions/checkout@v2
       with:
-        path: nginx-config  # Optional: if you only want to checkout the nginx-config directory
+        path: .  # Ensure the whole repository is checked out
 
     - name: Set up SSH key
       run: |
@@ -27,6 +27,7 @@ jobs:
 
     - name: Copy Nginx configuration to EC2
       run: |
+        # Path should reflect the root directory
         scp -o StrictHostKeyChecking=no -i mykey.pem ./nginx-config/default.conf ubuntu@$EC2_PUBLIC_IP:/home/ubuntu/default.conf
 
     - name: Update Nginx configuration on EC2
