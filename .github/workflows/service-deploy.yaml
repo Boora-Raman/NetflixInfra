@@ -1,0 +1,29 @@
+name: Nginx Configuration Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  EC2_PUBLIC_IP: 98.82.190.123  # Replace with your EC2 public IP
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+jobs:
+  Deploy_Nginx_Config:
+    name: Deploy Nginx Config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: SSH to EC2 and copy Nginx config
+        run: |
+          echo "$SSH_PRIVATE_KEY" > mykey.pem
+          chmod 600 mykey.pem
+          
+          # Copy Nginx config files from the repo to the EC2 instance
+          scp -o StrictHostKeyChecking=no -i mykey.pem -r nginx-config/* ubuntu@$EC2_PUBLIC_IP:/etc/nginx/conf.d/
+          
+          # Restart Nginx to apply changes
+          ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP "sudo systemctl restart nginx"
