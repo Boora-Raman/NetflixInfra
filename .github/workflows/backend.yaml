@@ -6,8 +6,10 @@ on:
       - main
 
 env:
-  EC2_PUBLIC_IP: 98.82.190.123
+  EC2_PUBLIC_IP: ${{ secrets.EC2_PUBLIC_IP }}
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 jobs:
   deploy:
@@ -18,13 +20,37 @@ jobs:
     - name: Checkout the app code
       uses: actions/checkout@v2
 
-    - name: Set up SSH key
+    - name: Set up Python environment
       run: |
-        echo "$SSH_PRIVATE_KEY" > mykey.pem
-        chmod 600 mykey.pem
+        python -m pip install --upgrade pip
+        pip install flake8 black
+
+    - name: Run flake8
+      run: |
+        flake8 .  # Run flake8 on the whole repository
+
+    - name: Format code with black
+      run: |
+        black .  # Format all Python files in the repository
+
+    - name: Build Docker image
+      run: |
+        IMAGE_TAG="${{ github.sha }}"
+        docker build -t $DOCKER_USERNAME/netflix-backend:$IMAGE_TAG .
+
+    - name: Login to Docker Hub
+      run: |
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+    - name: Push Docker image to Docker Hub
+      run: |
+        IMAGE_TAG="${{ github.sha }}"
+        docker push $DOCKER_USERNAME/netflix-backend:$IMAGE_TAG
 
     - name: Copy application files to EC2
       run: |
+        echo "$SSH_PRIVATE_KEY" > mykey.pem
+        chmod 600 mykey.pem
         scp -o StrictHostKeyChecking=no -i mykey.pem -r * ubuntu@$EC2_PUBLIC_IP:~/NetflixMovieCatalog/
 
     - name: Run deployment script on EC2
