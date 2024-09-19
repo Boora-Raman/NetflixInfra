@@ -16,7 +16,7 @@ jobs:
     - name: Install SSH Key
       uses: webfactory/ssh-agent@v0.5.3
       with:
-        ssh-private-key: ${{ secrets.EC2_SSH_KEY }}  # Replace with your actual secret key if needed
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}  # Replace with your actual secret key if needed
 
     - name: Copy Nginx configuration file to EC2
       run: |
@@ -24,7 +24,7 @@ jobs:
 
     - name: Update Nginx configuration on EC2
       run: |
-        ssh -o StrictHostKeyChecking=no ubuntu@<YOUR_EC2_PUBLIC_IP> << EOF
+        ssh -o StrictHostKeyChecking=no ubuntu@<98.82.190.123> << EOF
           sudo cp /home/ubuntu/default.conf /etc/nginx/conf.d/default.conf
           sudo nginx -t
           if [ $? -eq 0 ]; then
