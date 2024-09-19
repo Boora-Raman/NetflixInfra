@@ -1,0 +1,47 @@
+name: Update Nginx Configuration
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  EC2_PUBLIC_IP: ${{ secrets.EC2_PUBLIC_IP }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+jobs:
+  update-nginx-config:
+    name: Update Nginx Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout the Nginx configuration
+      uses: actions/checkout@v2
+      with:
+        path: nginx-config  # Optional: if you only want to checkout the nginx-config directory
+
+    - name: Set up SSH key
+      run: |
+        echo "$SSH_PRIVATE_KEY" > mykey.pem
+        chmod 600 mykey.pem
+
+    - name: Copy Nginx configuration to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no -i mykey.pem ./nginx-config/default.conf ubuntu@$EC2_PUBLIC_IP:/home/ubuntu/default.conf
+
+    - name: Update Nginx configuration on EC2
+      run: |
+        ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP << 'EOF'
+          # Validate the new configuration
+          sudo nginx -t -c /home/ubuntu/default.conf
+          if [ $? -eq 0 ]; then
+            # Replace the existing configuration if the new one is valid
+            sudo cp /home/ubuntu/default.conf /etc/nginx/conf.d/default.conf
+            # Restart Nginx to apply the new configuration
+            sudo systemctl restart nginx
+            echo "Nginx configuration is correct and Nginx has been restarted."
+          else
+            echo "Nginx configuration failed. Please check the config file."
+            exit 1
+          fi
+        EOF
