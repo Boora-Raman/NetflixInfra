@@ -1,4 +1,4 @@
-name: Nginx Configuration Deployment
+name: Netflix Movie Catalog Service Deployment
 
 on:
   push:
@@ -6,24 +6,29 @@ on:
       - main
 
 env:
-  EC2_PUBLIC_IP: 98.82.190.123  # Replace with your EC2 public IP
-  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  EC2_PUBLIC_IP: 98.82.190.123 # TODO replace to your EC2 instance public IP
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}  # TODO define this secret in your GitHub repo settings
 
 jobs:
-  Deploy_Nginx_Config:
-    name: Deploy Nginx Config
+  Deploy:
+    name: Deploy in EC2
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout the app code
         uses: actions/checkout@v2
 
-      - name: SSH to EC2 and copy Nginx config
+      - name: SSH to EC2 instance
         run: |
           echo "$SSH_PRIVATE_KEY" > mykey.pem
           chmod 600 mykey.pem
           
-          # Copy Nginx config files from the repo to the EC2 instance
-          scp -o StrictHostKeyChecking=no -i mykey.pem -r nginx-config/* ubuntu@$EC2_PUBLIC_IP:/etc/nginx/conf.d/
+          # Copy the files from the current work dir into the EC2 instance, under ~/app.
+          scp -o StrictHostKeyChecking=no -i mykey.pem -r * ubuntu@$EC2_PUBLIC_IP:~/NetflixMovieCatalog/
           
-          # Restart Nginx to apply changes
-          ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP "sudo systemctl restart nginx"
+          # Connect to your EC2 instance and execute the deploy.sh script (this script is part of the repo files). 
+          # TODO You need to implement the deploy.sh script yourself.
+          #
+          # Upon completion, the NetflixMovieCatalog app should be running with its newer version. 
+          # To keep the app running in the background independently on the terminal session you are logging to, configure it as a Linux service.
+    
+          ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP "bash ~/NetflixMovieCatalog/deploy.sh"
