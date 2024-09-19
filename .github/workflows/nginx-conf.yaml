@@ -15,10 +15,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout the Nginx configuration
+    - name: Checkout the repository
       uses: actions/checkout@v2
       with:
         path: .  # Ensure the whole repository is checked out
+
+    - name: Validate Nginx configuration locally
+      run: |
+        # Copy the configuration file to the local Nginx configuration directory
+        sudo cp ./nginx-config/default.conf /etc/nginx/conf.d/default.conf
+        
+        # Test the Nginx configuration
+        sudo nginx -t
+        if [ $? -eq 0 ]; then
+          echo "Local Nginx configuration is correct."
+        else
+          echo "Local Nginx configuration failed. Please check the config file."
+          exit 1
+        fi
 
     - name: Set up SSH key
       run: |
@@ -26,14 +40,15 @@ jobs:
         chmod 600 mykey.pem
 
     - name: Copy Nginx configuration to EC2
+      if: success()  # Only run this step if the previous step was successful
       run: |
-        # Path should reflect the root directory
         scp -o StrictHostKeyChecking=no -i mykey.pem ./nginx-config/default.conf ubuntu@$EC2_PUBLIC_IP:/home/ubuntu/default.conf
 
     - name: Update Nginx configuration on EC2
+      if: success()  # Only run this step if the previous step was successful
       run: |
         ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP << 'EOF'
-          # Validate the new configuration
+          # Validate the new configuration on EC2
           sudo nginx -t -c /home/ubuntu/default.conf
           if [ $? -eq 0 ]; then
             # Replace the existing configuration if the new one is valid
