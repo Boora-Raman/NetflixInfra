@@ -13,17 +13,25 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Install Nginx
-      run: sudo apt update && sudo apt install -y nginx
+    - name: Install SSH Key
+      uses: webfactory/ssh-agent@v0.5.3
+      with:
+        ssh-private-key: ${{ secrets.EC2_SSH_KEY }}  # Replace with your actual secret key if needed
 
-    - name: Start Nginx
-      run: sudo systemctl start nginx
+    - name: Copy Nginx configuration file to EC2
+      run: |
+        scp -o StrictHostKeyChecking=no ./nginx-config/default.conf ubuntu@<98.82.190.123>:/home/ubuntu/default.conf
 
-    - name: Copy Nginx config file
-      run: sudo cp ./nginx-config/default.conf /etc/nginx/conf.d/default.conf
-
-    - name: Test Nginx configuration
-      run: sudo nginx -t
-
-    - name: Restart Nginx
-      run: sudo systemctl restart nginx
+    - name: Update Nginx configuration on EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no ubuntu@<YOUR_EC2_PUBLIC_IP> << EOF
+          sudo cp /home/ubuntu/default.conf /etc/nginx/conf.d/default.conf
+          sudo nginx -t
+          if [ $? -eq 0 ]; then
+            sudo systemctl restart nginx
+            echo "Nginx configuration is correct. Nginx restarted."
+          else
+            echo "Nginx configuration failed. Please check the config file."
+            exit 1
+          fi
+        EOF
