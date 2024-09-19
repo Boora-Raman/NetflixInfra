@@ -1,37 +1,35 @@
-name: Netflix Movie Catalog Service Deployment
+name: Deploy to EC2
 
 on:
   push:
     branches:
       - main
 
+env:
+  EC2_PUBLIC_IP: ${{ secrets.EC2_PUBLIC_IP }}
+  SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
 jobs:
   deploy:
+    name: Deploy Application
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
+    - name: Checkout the app code
       uses: actions/checkout@v2
 
-    - name: Install SSH Key
-      uses: webfactory/ssh-agent@v0.5.3
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}  # Replace with your actual secret key if needed
-
-    - name: Copy Nginx configuration file to EC2
+    - name: Set up SSH key
       run: |
-        scp -o StrictHostKeyChecking=no ./nginx-config/default.conf ubuntu@<98.82.190.123>:/home/ubuntu/default.conf
+        echo "$SSH_PRIVATE_KEY" > mykey.pem
+        chmod 600 mykey.pem
 
-    - name: Update Nginx configuration on EC2
+    - name: Copy application files to EC2
       run: |
-        ssh -o StrictHostKeyChecking=no ubuntu@<98.82.190.123> << EOF
-          sudo cp /home/ubuntu/default.conf /etc/nginx/conf.d/default.conf
-          sudo nginx -t
-          if [ $? -eq 0 ]; then
-            sudo systemctl restart nginx
-            echo "Nginx configuration is correct. Nginx restarted."
-          else
-            echo "Nginx configuration failed. Please check the config file."
-            exit 1
-          fi
+        scp -o StrictHostKeyChecking=no -i mykey.pem -r * ubuntu@$EC2_PUBLIC_IP:~/NetflixMovieCatalog/
+
+    - name: Run deployment script on EC2
+      run: |
+        ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP << 'EOF'
+          cd ~/NetflixMovieCatalog
+          bash deploy.sh
         EOF
