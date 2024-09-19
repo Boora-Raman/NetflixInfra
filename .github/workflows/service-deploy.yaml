@@ -13,14 +13,17 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - name: Install Nginx
+      run: sudo apt update && sudo apt install -y nginx
+
+    - name: Start Nginx
+      run: sudo systemctl start nginx
+
     - name: Copy Nginx config file
       run: sudo cp ./nginx-config/default.conf /etc/nginx/conf.d/default.conf
 
     - name: Test Nginx configuration
       run: sudo nginx -t
 
-    - name: Reload Nginx
-      run: sudo systemctl reload nginx
-
-    - name: Start Nginx service
-      run: sudo systemctl start nginx
+    - name: Restart Nginx
+      run: sudo systemctl restart nginx
