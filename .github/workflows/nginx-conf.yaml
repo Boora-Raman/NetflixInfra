@@ -1,4 +1,4 @@
-name: Update Nginx Configuration
+name: Deploy Nginx Configuration
 
 on:
   push:
@@ -8,56 +8,67 @@ on:
 env:
   EC2_PUBLIC_IP: ${{ secrets.EC2_PUBLIC_IP }}
   SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 jobs:
-  update-nginx-config:
-    name: Update Nginx Configuration
+  test-and-deploy:
+    name: Test and Deploy Nginx Configuration
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v2
-      with:
-        path: .  # Ensure the whole repository is checked out
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Validate Nginx configuration locally
-      run: |
-        # Copy the configuration file to the local Nginx configuration directory
-        sudo cp ./nginx-config/default.conf /etc/nginx/conf.d/default.conf
-        
-        # Test the Nginx configuration
-        sudo nginx -t
-        if [ $? -eq 0 ]; then
-          echo "Local Nginx configuration is correct."
-        else
-          echo "Local Nginx configuration failed. Please check the config file."
-          exit 1
-        fi
+      - name: Install Nginx Locally
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nginx
 
-    - name: Set up SSH key
-      run: |
-        echo "$SSH_PRIVATE_KEY" > mykey.pem
-        chmod 600 mykey.pem
+      - name: Copy Nginx Config for Testing
+        run: |
+          sudo cp ./nginx-config/default.conf /etc/nginx/conf.d/default.conf
 
-    - name: Copy Nginx configuration to EC2
-      if: success()  # Only run this step if the previous step was successful
-      run: |
-        scp -o StrictHostKeyChecking=no -i mykey.pem ./nginx-config/default.conf ubuntu@$EC2_PUBLIC_IP:/home/ubuntu/default.conf
+      - name: Test Local Nginx Configuration
+        run: |
+          sudo nginx -t
 
-    - name: Update Nginx configuration on EC2
-      if: success()  # Only run this step if the previous step was successful
-      run: |
-        ssh -i mykey.pem ubuntu@$EC2_PUBLIC_IP << 'EOF'
-          # Validate the new configuration on EC2
-          sudo nginx -t -c /home/ubuntu/default.conf
-          if [ $? -eq 0 ]; then
-            # Replace the existing configuration if the new one is valid
-            sudo cp /home/ubuntu/default.conf /etc/nginx/conf.d/default.conf
-            # Restart Nginx to apply the new configuration
-            sudo systemctl restart nginx
-            echo "Nginx configuration is correct and Nginx has been restarted."
-          else
-            echo "Nginx configuration failed. Please check the config file."
-            exit 1
-          fi
-        EOF
+      - name: Remove Local Nginx Config
+        run: |
+          sudo rm /etc/nginx/conf.d/default.conf
+
+      - name: Set up SSH key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > mykey.pem
+          chmod 600 mykey.pem
+
+      - name: Build Docker image for Nginx
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          docker build -t $DOCKER_USERNAME/nginx-custom:$IMAGE_TAG .
+
+      - name: Login to Docker Hub
+        run: |
+          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+
+      - name: Push Docker image to Docker Hub
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          docker push $DOCKER_USERNAME/nginx-custom:$IMAGE_TAG
+
+      - name: Deploy Docker image on EC2
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          ssh -o StrictHostKeyChecking=no -i mykey.pem $EC2_USER@$EC2_PUBLIC_IP << 'EOF'
+            # Stop and remove the existing Nginx container if it exists
+            if sudo docker ps -a --format '{{.Names}}' | grep -Eq "^nginx-custom\$"; then
+              sudo docker stop nginx-custom || true
+              sudo docker rm nginx-custom || true
+            fi
+
+            # Pull the latest Docker image from Docker Hub
+            sudo docker pull $DOCKER_USERNAME/nginx-custom:$IMAGE_TAG
+
+            # Run a new container with the pulled image
+            sudo docker run -d --name nginx-custom -p 80:80 $DOCKER_USERNAME/nginx-custom:$IMAGE_TAG
+          EOF
