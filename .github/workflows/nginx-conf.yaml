@@ -59,7 +59,7 @@ jobs:
       - name: Deploy Docker image on EC2
         run: |
           IMAGE_TAG="${{ github.sha }}"
-          ssh -o StrictHostKeyChecking=no -i mykey.pem $EC2_USER@$EC2_PUBLIC_IP << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i mykey.pem admin@$EC2_PUBLIC_IP << 'EOF'
             # Stop and remove the existing Nginx container if it exists
             if sudo docker ps -a --format '{{.Names}}' | grep -Eq "^nginx-custom\$"; then
               sudo docker stop nginx-custom || true
